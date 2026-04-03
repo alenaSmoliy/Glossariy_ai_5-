@@ -13,9 +13,7 @@ $PAGE->set_url('/local/glossary_ai/index.php', ['id' => $course_id]);
 $PAGE->set_title(get_string('pluginname', 'local_glossary_ai'));
 $PAGE->set_heading($course->fullname);
 $PAGE->requires->css('/local/glossary_ai/styles.css');
-$PAGE->requires->js('/local/glossary_ai/script.js');
 
-// Очищаем сессию
 unset($SESSION->glossary_ai_terms);
 
 $mform = new \local_glossary_ai\form\generation_form(null, ['course_id' => $course_id]);
@@ -41,7 +39,7 @@ echo $OUTPUT->header();
             🤖
         </div>
         <div class="glossary-ai-title">
-            <h1>Глоссарий ИИ</h1>
+            <h1><?php echo get_string('pluginname', 'local_glossary_ai'); ?></h1>
             <p>Автоматическая генерация терминов с помощью нейросети GigaChat</p>
         </div>
     </div>
