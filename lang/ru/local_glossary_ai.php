@@ -26,3 +26,4 @@ $string['terms_added'] = 'терминов добавлено';
 $string['duplicates_skipped'] = 'дубликатов пропущено';
 $string['added_to_glossary'] = 'Добавлено в глоссарий';
 $string['glossary_ai:use'] = 'Использовать Глоссарий ИИ';
+
