@@ -28,15 +28,10 @@ class gigachat_client {
         $this->load_config();
     }
     
-    /**
-     * Загрузка конфигурации из файла
-     */
     private function load_config() {
-        // Пути к файлу конфигурации
         $paths = [
             __DIR__ . '/../../gigachat_config.php',
             '/etc/moodle/gigachat_config.php',
-            '/var/www/moodle/local/glossary_ai/gigachat_config.php',
         ];
         
         $config = null;
@@ -59,22 +54,15 @@ class gigachat_client {
         }
     }
     
-    /**
-     * Проверка наличия конфигурации API
-     */
     public function is_configured() {
         return !empty($this->client_id) && !empty($this->client_secret);
     }
     
-    /**
-     * Получение токена доступа
-     */
     private function get_access_token() {
         if (!$this->is_configured()) {
             return false;
         }
         
-        // Проверяем, не истёк ли текущий токен
         if ($this->access_token && time() < $this->token_expires) {
             return $this->access_token;
         }
@@ -102,7 +90,7 @@ class gigachat_client {
         curl_close($ch);
         
         if ($http_code !== 200) {
-            error_log("GigaChat OAuth error: HTTP {$http_code}, Response: {$response}");
+            error_log("GigaChat OAuth error: HTTP {$http_code}");
             return false;
         }
         
@@ -114,13 +102,9 @@ class gigachat_client {
             return $this->access_token;
         }
         
-        error_log("GigaChat OAuth error: No access_token in response");
         return false;
     }
     
-    /**
-     * Генерация UUID для RqUID
-     */
     private function generate_uuid() {
         return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
             mt_rand(0, 0xffff), mt_rand(0, 0xffff),
@@ -131,9 +115,6 @@ class gigachat_client {
         );
     }
     
-    /**
-     * Извлечение текста из DOCX файла
-     */
     public function extract_docx_text($filepath) {
         if (!file_exists($filepath)) {
             return '';
@@ -151,62 +132,70 @@ class gigachat_client {
             return '';
         }
         
-        // Удаляем XML теги
         $xml = str_replace('</w:p>', "\n", $xml);
         $text = strip_tags($xml);
-        
-        // Очищаем текст
         $text = preg_replace('/[ \t]+/', ' ', $text);
         $text = preg_replace('/\n\s*\n/', "\n", $text);
         
         return trim($text);
     }
     
-    /**
-     * Формирование промпта для GigaChat
-     */
     private function build_prompt($topic, $count, $language, $context = '', $custom_prompt = '') {
-        $lang_text = ($language === 'ru') ? 'на русском языке' : 'in English';
-        
-        $prompt = "Ты - эксперт по созданию глоссариев. Создай глоссарий по теме '{$topic}'.\n\n";
-        $prompt .= "Требования:\n";
-        $prompt .= "- Сгенерируй ровно {$count} терминов {$lang_text}\n";
-        $prompt .= "- Каждый термин должен иметь чёткое, понятное определение\n";
-        $prompt .= "- Определения должны быть краткими, но информативными\n";
-        $prompt .= "- Термины должны быть релевантны теме\n\n";
-        
-        if (!empty($custom_prompt)) {
-            $prompt .= "Дополнительные требования: {$custom_prompt}\n\n";
+        if ($language === 'en') {
+            $prompt = "You are a glossary creation expert. Create a glossary on the topic '{$topic}'.\n\n";
+            $prompt .= "Requirements:\n";
+            $prompt .= "- Generate exactly {$count} terms in English\n";
+            $prompt .= "- Each term must have a clear, understandable definition\n";
+            $prompt .= "- Definitions should be concise but informative\n";
+            $prompt .= "- Terms must be relevant to the topic\n\n";
+            
+            if (!empty($custom_prompt)) {
+                $prompt .= "Additional requirements: {$custom_prompt}\n\n";
+            }
+            
+            if (!empty($context)) {
+                $context = mb_substr($context, 0, 3000);
+                $prompt .= "Use the following text as a source for terms:\n";
+                $prompt .= "---\n{$context}\n---\n\n";
+            }
+            
+            $prompt .= "Output format - ONLY JSON array. Example:\n";
+            $prompt .= '[{"term": "Example term", "definition": "Example definition"}]\n\n';
+            $prompt .= "Important: No explanations, only valid JSON array.";
+        } else {
+            $prompt = "Ты - эксперт по созданию глоссариев. Создай глоссарий по теме '{$topic}'.\n\n";
+            $prompt .= "Требования:\n";
+            $prompt .= "- Сгенерируй ровно {$count} терминов на русском языке\n";
+            $prompt .= "- Каждый термин должен иметь чёткое, понятное определение\n";
+            $prompt .= "- Определения должны быть краткими, но информативными\n";
+            $prompt .= "- Термины должны быть релевантны теме\n\n";
+            
+            if (!empty($custom_prompt)) {
+                $prompt .= "Дополнительные требования: {$custom_prompt}\n\n";
+            }
+            
+            if (!empty($context)) {
+                $context = mb_substr($context, 0, 3000);
+                $prompt .= "Используй следующий текст как источник для терминов:\n";
+                $prompt .= "---\n{$context}\n---\n\n";
+            }
+            
+            $prompt .= "Формат вывода - ТОЛЬКО JSON массив. Пример:\n";
+            $prompt .= '[{"term": "Пример термина", "definition": "Пример определения"}]\n\n';
+            $prompt .= "Важно: Без пояснений, только JSON массив.";
         }
-        
-        if (!empty($context)) {
-            $context = mb_substr($context, 0, 3000);
-            $prompt .= "Используй следующий текст как источник для терминов:\n";
-            $prompt .= "---\n{$context}\n---\n\n";
-        }
-        
-        $prompt .= "Формат вывода - ТОЛЬКО JSON массив. Пример правильного формата:\n";
-        $prompt .= '[{"term": "Пример термина", "definition": "Пример определения"}, {"term": "Второй термин", "definition": "Второе определение"}]\n\n';
-        $prompt .= "Важно: Не добавляй никаких пояснений, комментариев или дополнительного текста. Только JSON массив. Убедись, что JSON валидный.";
         
         return $prompt;
     }
     
-    /**
-     * Парсинг ответа от GigaChat
-     */
     private function parse_response($response) {
-        // Ищем JSON массив в ответе
         $json_start = strpos($response, '[');
         $json_end = strrpos($response, ']');
         
         if ($json_start !== false && $json_end !== false && $json_end > $json_start) {
             $json_string = substr($response, $json_start, $json_end - $json_start + 1);
-            
-            // Очищаем JSON от возможных ошибок
             $json_string = preg_replace('/,\s*]/', ']', $json_string);
             $json_string = preg_replace('/,\s*}/', '}', $json_string);
-            $json_string = preg_replace('/[\x00-\x1F\x7F]/', '', $json_string);
             
             $terms = json_decode($json_string, true);
             
@@ -225,45 +214,22 @@ class gigachat_client {
                         ];
                     }
                 }
-                
                 if (!empty($valid_terms)) {
                     return $valid_terms;
                 }
             }
         }
         
-        // Альтернативный парсинг для нестандартного JSON
-        $pattern = '/["\']?(?:term|Термин)["\']?\s*:\s*["\']([^"\']+)["\']\s*,\s*["\']?(?:definition|Определение)["\']?\s*:\s*["\']([^"\']+)["\']/ui';
-        
-        if (preg_match_all($pattern, $response, $matches, PREG_SET_ORDER)) {
-            $valid_terms = [];
-            foreach ($matches as $match) {
-                $valid_terms[] = [
-                    'term' => trim($match[1]),
-                    'definition' => trim($match[2])
-                ];
-            }
-            if (!empty($valid_terms)) {
-                return $valid_terms;
-            }
-        }
-        
-        error_log("GigaChat parse error: Could not parse response - " . substr($response, 0, 500));
         return false;
     }
     
-    /**
-     * Генерация терминов через GigaChat API
-     */
     public function generate_terms($topic, $count, $language = 'ru', $context = '', $custom_prompt = '') {
         if (!$this->is_configured()) {
-            error_log("GigaChat API not configured");
             return ['error' => 'api_not_configured'];
         }
         
         $token = $this->get_access_token();
         if (!$token) {
-            error_log("GigaChat: Failed to get access token");
             return ['error' => 'token_failed'];
         }
         
@@ -296,16 +262,9 @@ class gigachat_client {
         
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_error = curl_error($ch);
         curl_close($ch);
         
-        if ($curl_error) {
-            error_log("GigaChat cURL error: {$curl_error}");
-            return ['error' => 'curl_error', 'message' => $curl_error];
-        }
-        
         if ($http_code !== 200) {
-            error_log("GigaChat API error: HTTP {$http_code}, Response: {$response}");
             return ['error' => 'api_error', 'http_code' => $http_code];
         }
         
@@ -316,35 +275,15 @@ class gigachat_client {
             $terms = $this->parse_response($content);
             
             if ($terms && is_array($terms) && !empty($terms)) {
-                // Обрезаем до нужного количества, если API вернул больше
                 if (count($terms) > $count) {
                     $terms = array_slice($terms, 0, $count);
                 }
                 return $terms;
             }
             
-            error_log("GigaChat: Failed to parse terms from response");
             return ['error' => 'parse_error'];
         }
         
-        error_log("GigaChat: Unexpected response structure - " . print_r($data, true));
         return ['error' => 'invalid_response'];
-    }
-    
-    /**
-     * Простая генерация для тестирования (без реального API)
-     */
-    public function generate_mock_terms($topic, $count, $language = 'ru') {
-        $terms = [];
-        $lang_suffix = $language === 'ru' ? '' : ' (EN)';
-        
-        for ($i = 1; $i <= $count; $i++) {
-            $terms[] = [
-                'term' => "Термин {$i}: {$topic}{$lang_suffix}",
-                'definition' => "Это подробное определение для термина {$i} по теме '{$topic}'. Термин объясняется в контексте современной науки и практики."
-            ];
-        }
-        
-        return $terms;
     }
 }
